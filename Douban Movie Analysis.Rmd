@@ -1,0 +1,96 @@
+---
+title: "Douban Movie Review"
+output: html_document
+---
+## load dataset
+```{r}
+setwd("~/Desktop/Simon/Courses/Fall2019_MGC461 Professional Communication/Round4")
+library(readr)
+data <- read_csv("DMSC.csv")
+head(data,10)
+```
+
+## Add new features
+```{r, echo=FALSE}
+data$Star<-as.factor(data$Star)
+data$Movie_Name_EN<-as.factor(data$Movie_Name_EN)
+
+## Days since the movie is released 
+movie_list<-unique(data$Movie_Name_EN)
+release_time <-c('2015-05-01','2016-07-08','2016-05-06','2012-12-20','2015-09-30','2015-07-10','2015-07-10','2015-09-30','2008-04-30','2013-02-07','2017-01-28','2016-12-16','2012-12-12','2015-04-30','2016-09-30','2016-09-14')
+# define releasetime function
+releasetime <- function(x){
+    ind <- match(x,movie_list)
+    Release_Time <- release_time[ind]
+    return(Release_Time)
+}
+data$Date<-as.Date(data$Date,format = "%m/%d/%y")
+data$Crawl_Date<-as.Date(data$Crawl_Date,format = "%m/%d/%y")
+data$Release_Time<-sapply(data$Movie_Name_EN,FUN=releasetime)
+data$Days_Since_Releasing <- data$Date-as.Date(data$Release_Time,format = "%Y-%m-%d")
+
+
+## The length of the review
+data$Comment_Length<-sapply(data$Comment,nchar)
+data[is.na(data$Comment_Length),]$Comment_Length<-0
+
+## Number of reviews before each review
+library(dplyr)
+data<-data %>%
+    group_by(Movie_Name_EN) %>%
+    mutate(Number_of_Prior_Reviews = order(order(Date,decreasing=FALSE))-1)
+
+head(data,10)
+```
+
+
+## Correlation plot
+```{r, echo=FALSE}
+library(ggplot2)
+
+# Correlation between Days since the movie is released and the number of likes
+p1<-ggplot(data,aes(x=Days_Since_Releasing, y=Like)) + geom_point(color = '#8ba475')+
+p1
+
+# Correlation between the length of the review and the average number of likes
+comment<-aggregate(data$Like, by=list(data$Comment_Length), FUN=mean)
+comment<-comment %>% 
+  rename(
+    Comment_Length = Group.1,
+    Average_Number_of_Likes = x
+    )
+p3<-ggplot(comment,aes(x=Comment_Length,y=Average_Number_of_Likes)) + geom_bar(stat="identity",color = '#8ba475')
+p3
+
+# Correlation between the number of reviews before and the average number of likes
+p4<-ggplot(data,aes(x=Number_of_Prior_Reviews, y=Like)) + geom_point(color = '#8ba475')
+p4
+
+cor(data$Number_of_Prior_Reviews,as.numeric(data$Days_Since_Releasing))
+
+# Correlation between the stars and the average number of likes
+p5<-ggplot(data,aes(x=Star, y=Like)) + geom_point(color = '#8ba475')
+p5
+```
+
+
+## Zero-inflation Regression
+```{r, echo=FALSE}
+fit_lm<-lm(Like~Comment_Length+Number_of_Prior_Reviews+Star+Days_Since_Releasing+Movie_Name_EN,data=data)
+summary(fit_lm)
+
+library(pscl)
+model_zi = zeroinfl(Like~Comment_Length+log(Number_of_Prior_Reviews+1)+Star+Days_Since_Releasing+Movie_Name_EN,data=data,dist = "poisson")
+summary(model_zi)
+
+```
+
+
+
+
+
+```
+
+
+
+
